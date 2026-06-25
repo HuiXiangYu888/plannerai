@@ -631,12 +631,18 @@ def _delete_plan_action(current_sid: str, session_id: str, messages_state: list,
         )
 
 
-def _rename_plan_action(current_sid: str, new_title: str) -> str:
-    """重命名指定计划（返回刷新后的列表 HTML）"""
+def _rename_plan_action(current_sid: str, new_title: str, current_messages: list[dict[str, str]], current_plan: dict[str, Any]):
+    """重命名会话计划，同时更新数据库记录、内存状态和会话气泡中显示的历史标题"""
     if not current_sid or not new_title:
-        return _render_plan_list(current_sid)
+        return _render_plan_list(current_sid), current_messages, current_messages, current_plan
+
     rename_plan(current_sid, new_title)
-    return _render_plan_list(current_sid)
+    
+    # 重新从数据库读取更新后的计划和消息
+    updated_plan = load_plan(current_sid)
+    updated_messages = load_messages(current_sid)
+    
+    return _render_plan_list(current_sid), updated_messages, updated_messages, updated_plan
 
 
 async def send_message(
@@ -957,8 +963,8 @@ def build_demo() -> gr.Blocks:
         # 隐藏按钮：重命名计划
         rename_plan_btn.click(
             fn=_rename_plan_action,
-            inputs=[current_plan_sid, rename_title_input],
-            outputs=[plan_list_html],
+            inputs=[current_plan_sid, rename_title_input, messages_state, plan_state],
+            outputs=[plan_list_html, chatbot, messages_state, plan_state],
             queue=True,
         )
 

@@ -118,7 +118,7 @@ def clear_session_data(session_id: str) -> None:
 
 
 def rename_plan(session_id: str, new_title: str) -> bool:
-    """重命名计划（更新 plan_data 中的 title 字段）"""
+    """重命名计划（更新 plan_data 中的 title 字段以及历史消息中的标题）"""
     with _DB_LOCK:
         row = _conn.execute(
             "SELECT plan_data FROM plans WHERE session_id = ?", (session_id,)
@@ -129,12 +129,38 @@ def rename_plan(session_id: str, new_title: str) -> bool:
             plan_data = json.loads(row["plan_data"]) if row["plan_data"] else {}
         except (json.JSONDecodeError, TypeError):
             plan_data = {}
+        
+        old_title = plan_data.get("title", "")
         plan_data["title"] = new_title
         now = _now()
+        
+        # 更新计划数据
         _conn.execute(
             "UPDATE plans SET plan_data = ?, updated_at = ? WHERE session_id = ?",
             (json.dumps(plan_data, ensure_ascii=False), now, session_id),
         )
+        
+        # 同时更新历史消息中对应的旧标题
+        if old_title and old_title != new_title:
+            conv_row = _conn.execute(
+                "SELECT messages FROM conversations WHERE session_id = ?", (session_id,)
+            ).fetchone()
+            if conv_row:
+                try:
+                    messages = json.loads(conv_row["messages"])
+                    updated = False
+                    for msg in messages:
+                        if msg.get("content") and old_title in msg["content"]:
+                            msg["content"] = msg["content"].replace(old_title, new_title)
+                            updated = True
+                    if updated:
+                        _conn.execute(
+                            "UPDATE conversations SET messages = ?, updated_at = ? WHERE session_id = ?",
+                            (json.dumps(messages, ensure_ascii=False), now, session_id),
+                        )
+                except Exception:
+                    pass
+
         _conn.execute(
             "UPDATE sessions SET updated_at = ? WHERE session_id = ?",
             (now, session_id),

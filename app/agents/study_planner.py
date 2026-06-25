@@ -57,20 +57,20 @@ def _clean_goal_summary(text: str, duration_info: dict[str, Any], availability_i
     if duration_info.get("found") and duration_info.get("candidate", {}).get("matched_text"):
         summary = summary.replace(duration_info["candidate"]["matched_text"], "")
 
-    # 2. 对 availability blocks，只用全局时间正则剔除时间模式，而不是整段 matched_text
-    #    （避免把包含目标关键词的整个子句删除，如 '高考语文的复习计划，每天2小时'）
+    # 2. 对 availability blocks，只用全局时间正则剔除时间模式
     summary = _TIME_STRIP_RE.sub("", summary)
 
     # 3. 循环移除常见的无意义前缀
     prefixes = (
         "帮我", "请帮我", "给我", "请给我", "请", "生成", "做一个", "安排一个",
-        "安排", "制定", "设计", "我想", "我要", "一个", "一份", "这个", "该",
+        "安排", "制定", "制定一个", "设计", "设计一个", "我想", "我要", "一个", "一份", "这个", "该",
+        "这是", "是一个", "这是一份", "关于", "针对", "进行", "开展", "做个", "制作", "新建", "创建"
     )
 
     changed = True
     while changed:
         changed = False
-        summary = summary.strip(" ，,。；;、？?！!\n\r")
+        summary = summary.strip(" ，,。；;、？?！!\n\r的")
         for p in prefixes:
             if summary.startswith(p):
                 summary = summary[len(p):]
@@ -78,18 +78,21 @@ def _clean_goal_summary(text: str, duration_info: dict[str, Any], availability_i
                 break
 
     # 4. 循环移除常见的无意义后缀（注意：'学习' 不再作为后缀，避免删掉 '自学' 之类的词）
-    suffixes = ("学习计划", "复习计划", "训练计划", "计划", "安排", "课表", "日程", "的")
+    suffixes = (
+        "学习计划", "复习计划", "备考计划", "训练计划", "计划", "安排", "课表", "日程", 
+        "时间表", "安排表", "方案", "规划", "为期", "持续", "时长", "时间", "周期", "坚持"
+    )
     changed = True
     while changed:
         changed = False
-        summary = summary.strip(" ，,。；;、？?！!\n\r")
+        summary = summary.strip(" ，,。；;、？?！!\n\r的")
         for s in suffixes:
             if summary.endswith(s):
                 summary = summary[:-len(s)]
                 changed = True
                 break
 
-    summary = summary.strip(" ，,。；;、？?！!\n\r")
+    summary = summary.strip(" ，,。；;、？?！!\n\r的")
     return summary or "学习"
 
 def _build_phases(horizon_days: int, goal_summary: str) -> list[dict[str, Any]]:
