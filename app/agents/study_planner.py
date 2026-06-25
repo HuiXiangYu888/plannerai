@@ -167,14 +167,17 @@ def _build_slot_templates(availability_info: dict[str, Any]) -> list[dict[str, A
 
     return templates
 
-def generate_study_plan(text: str) -> dict[str, Any]:
+def generate_study_plan(text: str, suggested_title: str | None = None) -> dict[str, Any]:
     raw_text = (text or "").strip()
     # 如果输入是一个 JSON 字符串（大模型误传了上下文 JSON），尝试从中提取真实的用户输入或目标标题
     if raw_text.startswith("{") and raw_text.endswith("}"):
         try:
             data = json.loads(raw_text)
             if isinstance(data, dict):
-                for key in ["goal_summary", "user_input", "text", "goal", "query", "message", "title"]:
+                # 如果大模型错把整个 plans 结构传过来了，其中如果有已提取的主题，我们优先抽取
+                if "goal_summary" in data and isinstance(data["goal_summary"], str) and data["goal_summary"].strip():
+                    suggested_title = data["goal_summary"].strip()
+                for key in ["user_input", "text", "goal", "query", "message", "title"]:
                     if key in data and isinstance(data[key], str) and data[key].strip():
                         raw_text = data[key].strip()
                         break
@@ -200,7 +203,20 @@ def generate_study_plan(text: str) -> dict[str, Any]:
     duration_info = extract_plan_duration(raw_text)
     availability_info = parse_time_availability(raw_text)
 
-    goal_summary = _clean_goal_summary(raw_text, duration_info, availability_info)
+    # 优先采用大模型提取的高质量主题名
+    if suggested_title and suggested_title.strip():
+        goal_summary = suggested_title.strip()
+        # 清理可能误带的“计划/安排”等后缀，以保持主题名的精炼
+        clean_suffixes = (
+            "学习计划", "复习计划", "备考计划", "计划", "安排", "课表", "日程", 
+            "时间表", "安排表", "方案", "规划"
+        )
+        for s in clean_suffixes:
+            if goal_summary.endswith(s):
+                goal_summary = goal_summary[:-len(s)]
+        goal_summary = goal_summary.strip(" ，,。；;、？?！!\n\r的")
+    else:
+        goal_summary = _clean_goal_summary(raw_text, duration_info, availability_info)
     horizon_days = None
     if duration_info.get("found"):
         horizon_days = max(1, int(round(duration_info["candidate"]["total_minutes"] / 1440)))

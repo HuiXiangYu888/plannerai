@@ -94,19 +94,20 @@ def tool_calculate_time_blocks(
 
 
 @tool
-def tool_generate_plan(user_input: str) -> str:
-    """根据用户的自然语言输入生成完整的学习计划。
+def tool_generate_plan(user_input: str, suggested_title: str | None = None) -> str:
+    """根据用户的自然语言输入和提炼的主题生成完整的学习计划。
 
     这是最终生成计划的工具，应在收集到足够信息后调用。
 
     Args:
         user_input: 用户的完整学习需求描述（如"制定一个三个月的高考数学复习计划，每天学习2小时"）。
+        suggested_title: 可选。大模型提炼的 4-8 字的高拟真、极简短计划主题名称（例如：“雅思备考”、“考研冲刺”、“Python编程”），请绝对不要包含“计划”或“复习计划”等后缀。
 
     Returns:
         JSON 字符串，包含 title（计划标题）、phases（阶段安排）、goal_summary（目标摘要）、
         status（ok/warning/need_more_info）等完整计划结构。
     """
-    result = generate_study_plan(user_input)
+    result = generate_study_plan(user_input, suggested_title=suggested_title)
     return json.dumps(result, ensure_ascii=False, default=str)
 
 
