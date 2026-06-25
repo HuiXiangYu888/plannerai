@@ -249,13 +249,39 @@ details:hover {
 #input-area textarea {
     border-radius: 14px !important;
     border: 1px solid #d1d5db !important;
-    padding: 12px 16px !important;
+    padding: 12px 48px 12px 16px !important; /* 给右侧预留出加载动画的空间 */
     transition: all 0.3s ease !important;
     box-shadow: inset 0 2px 4px rgba(0,0,0,0.02) !important;
 }
 #input-area textarea:focus {
     border-color: #3b82f6 !important;
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
+}
+
+/* 隐藏聊天区域和侧边栏的默认加载遮罩与 Spinner */
+#chat-area .loading-status,
+.sidebar-col .loading-status,
+#plan_list_container .loading-status {
+    display: none !important;
+}
+
+/* 将输入框的加载 Spinner 定位到输入框内部右侧，并去除遮罩背景 */
+#input-area .loading-status {
+    position: absolute !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    right: 16px !important;
+    margin: 0 !important;
+    z-index: 10 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    height: auto !important;
+    width: auto !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
 }
 
 /* 发送按钮 */
@@ -296,6 +322,20 @@ details:hover {
     background: #e5e7eb !important;
     color: #1f2937 !important;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+}
+
+#export-options-col {
+    margin-top: 10px !important;
+}
+
+#export-checkbox-group {
+    max-height: 40vh !important;
+    overflow-y: auto !important;
+}
+
+#export-checkbox-group .wrap {
+    flex-wrap: nowrap !important;
+    flex-direction: column !important;
 }
 """
 
@@ -480,6 +520,50 @@ def _plan_to_markdown(plan: dict[str, Any]) -> str:
             lines.append(f"- {item}")
 
     return "\n".join(lines)
+
+
+def _export_plan_to_markdown(plan: dict[str, Any], updated_at: str, session_id: str) -> str:
+    """将计划转换为导出专用的纯净表格格式 Markdown"""
+    title = plan.get("title") or "学习计划"
+    if not isinstance(plan, dict) or not plan:
+        return f"## {title}\n**生成时间**: {updated_at}\n\n缺少关键信息，暂无计划生成"
+    
+    status = plan.get("status")
+    
+    if status == "need_more_info":
+        return f"## {title}\n**生成时间**: {updated_at}\n\n缺少关键信息，暂无计划生成"
+
+    messages = load_messages(session_id)
+    agent_plan_content = ""
+    for msg in reversed(messages):
+        if msg.get("role") == "assistant" and msg.get("content"):
+            content = msg["content"].strip()
+            # 判断是否可能包含计划
+            if len(content) > 50 and ("|" in content or "阶段" in content or "计划" in content):
+                lines = content.split("\n")
+                start_idx = -1
+                end_idx = -1
+                for i, line in enumerate(lines):
+                    s_line = line.strip()
+                    # 计划起点通常是标题或表格
+                    if start_idx == -1 and (s_line.startswith("#") or s_line.startswith("|")):
+                        start_idx = i
+                    # 计划终点通常是表格行或列表项
+                    if s_line.startswith("|") or s_line.startswith("-") or s_line.startswith("*"):
+                        end_idx = i
+                
+                # 如果成功提取到区间，并且区间内真正有计划元素，则采用
+                if start_idx != -1 and end_idx != -1 and start_idx <= end_idx:
+                    extracted = "\n".join(lines[start_idx:end_idx+1])
+                    if "|" in extracted or "#" in extracted:
+                        agent_plan_content = extracted
+                        break
+    
+    if not agent_plan_content:
+        # 如果大模型还没有真正输出表格计划，说明还在询问收集信息阶段
+        return f"## {title}\n**生成时间**: {updated_at}\n\n缺少关键信息，暂无计划生成"
+
+    return f"## {title}\n**生成时间**: {updated_at}\n\n{agent_plan_content}"
 
 
 def _render_plan_list(current_sid: str = "") -> str:
@@ -760,9 +844,11 @@ async def send_message(
     if synced_plan:
         existing_title = final_plan.get("title", "")
         new_title = synced_plan.get("title", "")
-        generic_titles = {"学习计划", "学习", "", None}
-        if existing_title and (not new_title or new_title in generic_titles):
+        generic_titles = {"学习计划", "计划", "专属计划", "学习", "", None}
+        is_mod = new_title and any(k in new_title for k in ["改成", "修改", "调整", "变成", "变为", "增加", "减少", "更新", "个月", "天"]) and existing_title
+        if existing_title and (not new_title or new_title in generic_titles or is_mod):
             synced_plan["title"] = existing_title
+            synced_plan["goal_summary"] = final_plan.get("goal_summary", synced_plan.get("goal_summary"))
         final_plan = synced_plan
     elif full_reply and not has_error:
         try:
@@ -770,9 +856,11 @@ async def send_message(
             if new_plan.get("found"):
                 existing_title = final_plan.get("title", "")
                 new_title = new_plan.get("title", "")
-                generic_titles = {"学习计划", "学习", "", None}
-                if existing_title and (not new_title or new_title in generic_titles):
+                generic_titles = {"学习计划", "计划", "专属计划", "学习", "", None}
+                is_mod = new_title and any(k in new_title for k in ["改成", "修改", "调整", "变成", "变为", "增加", "减少", "更新", "个月", "天"]) and existing_title
+                if existing_title and (not new_title or new_title in generic_titles or is_mod):
                     new_plan["title"] = existing_title
+                    new_plan["goal_summary"] = final_plan.get("goal_summary", new_plan.get("goal_summary"))
                 final_plan = new_plan
         except Exception:
             pass
@@ -854,22 +942,32 @@ def _export_plan(plan_state: dict[str, Any]) -> str | None:
         return None
 
 
-def _export_all_plans() -> str | None:
-    """导出所有计划为单个 Markdown 文件"""
+def _prepare_export_options():
     plans = list_all_plans()
     if not plans:
+        return gr.update(choices=[], value=[]), gr.update(visible=True), gr.update(visible=False)
+    choices = [(p["title"], p["session_id"]) for p in plans]
+    default_selected = [p["session_id"] for p in plans]
+    return gr.update(choices=choices, value=default_selected), gr.update(visible=True), gr.update(visible=False)
+
+def _do_export_selected(selected_sids: list[str]) -> str | None:
+    if not selected_sids:
         return None
-    md_lines = ["# 🌟 PlannerAI 所有学习计划\n"]
-    for p in plans:
+    plans = list_all_plans()
+    selected_plans = [p for p in plans if p["session_id"] in selected_sids]
+    if not selected_plans:
+        return None
+        
+    md_lines = ["# 🌟 PlannerAI 选定学习计划\n"]
+    for p in selected_plans:
         sid = p["session_id"]
         plan_data = load_plan(sid)
-        title = p["title"]
-        md_lines.append(f"## {title}\n")
-        md_lines.append(_plan_to_markdown(plan_data))
+        updated_at = p.get("updated_at", "未知时间")
+        md_lines.append(_export_plan_to_markdown(plan_data, updated_at, sid))
         md_lines.append("\n---\n")
     try:
         tmp = tempfile.NamedTemporaryFile(
-            mode="w", suffix=".md", prefix="all_study_plans_", delete=False, encoding="utf-8"
+            mode="w", suffix=".md", prefix="study_plans_", delete=False, encoding="utf-8"
         )
         tmp.write("\n".join(md_lines))
         tmp.close()
@@ -897,7 +995,14 @@ def build_demo() -> gr.Blocks:
                     elem_classes=["plan-list-wrapper"],
                 )
                 with gr.Column(elem_id="export-btn-container"):
-                    export_btn = gr.Button("📥 一键导出全部计划", elem_id="export-btn")
+                    export_btn = gr.Button("📥 导出选定计划", elem_id="export-btn")
+                    
+                    with gr.Column(visible=False, elem_id="export-options-col") as export_options_col:
+                        export_checkboxgroup = gr.CheckboxGroup(label="请勾选要导出的计划", choices=[], value=[], elem_id="export-checkbox-group")
+                        with gr.Row():
+                            confirm_export_btn = gr.Button("✅ 确认导出")
+                            cancel_export_btn = gr.Button("❌ 取消")
+
                     export_file = gr.File(label="", elem_id="export-file", interactive=False)
 
 
@@ -968,13 +1073,29 @@ def build_demo() -> gr.Blocks:
             queue=True,
         )
 
-        # 导出全部计划
+        # 导出选定计划
         export_btn.click(
-            fn=_export_all_plans,
+            fn=_prepare_export_options,
             inputs=[],
+            outputs=[export_checkboxgroup, export_options_col, export_btn],
+        )
+
+        confirm_export_btn.click(
+            fn=_do_export_selected,
+            inputs=[export_checkboxgroup],
             outputs=[export_file],
         ).then(
             fn=None, inputs=None, outputs=None, js="() => { setTimeout(() => { const a = document.querySelector('#export-file a'); if(a) a.click(); }, 500); }"
+        ).then(
+            fn=lambda: (gr.update(visible=False), gr.update(visible=True)),
+            inputs=[],
+            outputs=[export_options_col, export_btn],
+        )
+
+        cancel_export_btn.click(
+            fn=lambda: (gr.update(visible=False), gr.update(visible=True)),
+            inputs=[],
+            outputs=[export_options_col, export_btn],
         )
 
         # 发送按钮和回车发送

@@ -53,6 +53,11 @@ def _clean_goal_summary(text: str, duration_info: dict[str, Any], availability_i
     """从用户原始输入中提取目标主题，精准剔除时间/时长信息，保留学科/目标关键词。"""
     summary = text.strip()
 
+    # 0. 如果传入了长段对话，只取第一句话或第一个段落作为目标基础
+    parts = re.split(r'[\n\r。！\?？！]', summary)
+    if parts and parts[0].strip():
+        summary = parts[0].strip()
+
     # 1. 精准移除 duration 匹配到的时间片段（只移除正则匹配的数字+单位，不扩大范围）
     if duration_info.get("found") and duration_info.get("candidate", {}).get("matched_text"):
         summary = summary.replace(duration_info["candidate"]["matched_text"], "")
@@ -92,8 +97,15 @@ def _clean_goal_summary(text: str, duration_info: dict[str, Any], availability_i
                 changed = True
                 break
 
-    summary = summary.strip(" ，,。；;、？?！!\n\r的")
-    return summary or "学习"
+    # 强制剔除所有常见的标点符号
+    summary = re.sub(r'[，,。；;、：:？?！!\(\)（）"\'“”‘’\n\r]', '', summary)
+    summary = summary.strip("的 ")
+    
+    # 最终如果还是太长，强行截断，保证精简
+    if len(summary) > 12:
+        summary = summary[:12]
+        
+    return summary or "专属"
 
 def _build_phases(horizon_days: int, goal_summary: str) -> list[dict[str, Any]]:
     if horizon_days <= 1:
@@ -203,10 +215,13 @@ def generate_study_plan(text: str, suggested_title: str | None = None) -> dict[s
     duration_info = extract_plan_duration(raw_text)
     availability_info = parse_time_availability(raw_text)
 
+    final_title = None
     # 优先采用大模型提取的高质量主题名
     if suggested_title and suggested_title.strip():
-        goal_summary = suggested_title.strip()
-        # 清理可能误带的“计划/安排”等后缀，以保持主题名的精炼
+        final_title = suggested_title.strip()
+        final_title = re.sub(r'[，,。；;、：:？?！!\n\r]', '', final_title).strip()
+        goal_summary = final_title
+        # 清理“计划/安排”等后缀得到精炼的 goal_summary，用于阶段描述等内部拼装
         clean_suffixes = (
             "学习计划", "复习计划", "备考计划", "计划", "安排", "课表", "日程", 
             "时间表", "安排表", "方案", "规划"
@@ -214,9 +229,11 @@ def generate_study_plan(text: str, suggested_title: str | None = None) -> dict[s
         for s in clean_suffixes:
             if goal_summary.endswith(s):
                 goal_summary = goal_summary[:-len(s)]
-        goal_summary = goal_summary.strip(" ，,。；;、？?！!\n\r的")
+        goal_summary = goal_summary.strip("的 ")
     else:
         goal_summary = _clean_goal_summary(raw_text, duration_info, availability_info)
+        final_title = f"{goal_summary}计划"
+    
     horizon_days = None
     if duration_info.get("found"):
         horizon_days = max(1, int(round(duration_info["candidate"]["total_minutes"] / 1440)))
@@ -249,7 +266,7 @@ def generate_study_plan(text: str, suggested_title: str | None = None) -> dict[s
         "found": True,
         "status": status,
         "plan_type": plan_type,
-        "title": f"{goal_summary}学习计划",
+        "title": final_title,
         "goal_summary": goal_summary,
         "horizon_days": horizon_days,
         "capacity": {
@@ -263,7 +280,7 @@ def generate_study_plan(text: str, suggested_title: str | None = None) -> dict[s
         "phases": phases,
         "clarification_needed": clarification_needed,
         "suggested_followup": (
-            "请补充学习目标和可用时间。"
+            "请补充你的目标和可用时间。"
             if clarification_needed
             else "如果要调整计划，可以修改周期、可用时长或优先级。"
         ),
