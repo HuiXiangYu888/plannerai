@@ -169,6 +169,17 @@ def _build_slot_templates(availability_info: dict[str, Any]) -> list[dict[str, A
 
 def generate_study_plan(text: str) -> dict[str, Any]:
     raw_text = (text or "").strip()
+    # 如果输入是一个 JSON 字符串（大模型误传了上下文 JSON），尝试从中提取真实的用户输入或目标标题
+    if raw_text.startswith("{") and raw_text.endswith("}"):
+        try:
+            data = json.loads(raw_text)
+            if isinstance(data, dict):
+                for key in ["goal_summary", "user_input", "text", "goal", "query", "message", "title"]:
+                    if key in data and isinstance(data[key], str) and data[key].strip():
+                        raw_text = data[key].strip()
+                        break
+        except Exception:
+            pass
     if not raw_text:
         return {
             "found": False,
