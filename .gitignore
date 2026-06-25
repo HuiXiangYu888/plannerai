@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+
+# Local configuration
+.env
+.env.*
+!.env.example
+
+# Runtime data
+.data_gradio/
+*.db
+*.db-shm
+*.db-wal
+
+# Generated debug artifacts
+*.png
+*.log
+
+# IDEs
+.idea/
+.vscode/
