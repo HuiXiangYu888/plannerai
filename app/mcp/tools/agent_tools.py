@@ -101,7 +101,7 @@ def tool_generate_plan(user_input: str, suggested_title: str | None = None) -> s
 
     Args:
         user_input: 用户的完整学习需求描述（如"制定一个三个月的高考数学复习计划，每天学习2小时"）。
-        suggested_title: 可选。大模型提炼的 4-8 字的高拟真、极简短计划主题名称（例如：“雅思备考”、“考研冲刺”、“Python编程”），请绝对不要包含“计划”或“复习计划”等后缀。
+        suggested_title: 可选。大模型提炼的高质量、完整的计划主题名称（例如：“雅思备考计划”、“新手在家健身计划”）。请不要包含任何标点符号。
 
     Returns:
         JSON 字符串，包含 title（计划标题）、phases（阶段安排）、goal_summary（目标摘要）、

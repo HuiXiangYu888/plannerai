@@ -140,26 +140,7 @@ def rename_plan(session_id: str, new_title: str) -> bool:
             (json.dumps(plan_data, ensure_ascii=False), now, session_id),
         )
         
-        # 同时更新历史消息中对应的旧标题
-        if old_title and old_title != new_title:
-            conv_row = _conn.execute(
-                "SELECT messages FROM conversations WHERE session_id = ?", (session_id,)
-            ).fetchone()
-            if conv_row:
-                try:
-                    messages = json.loads(conv_row["messages"])
-                    updated = False
-                    for msg in messages:
-                        if msg.get("content") and old_title in msg["content"]:
-                            msg["content"] = msg["content"].replace(old_title, new_title)
-                            updated = True
-                    if updated:
-                        _conn.execute(
-                            "UPDATE conversations SET messages = ?, updated_at = ? WHERE session_id = ?",
-                            (json.dumps(messages, ensure_ascii=False), now, session_id),
-                        )
-                except Exception:
-                    pass
+        # (已移除暴力修改历史消息内容的逻辑，保持历史记录的真实性)
 
         _conn.execute(
             "UPDATE sessions SET updated_at = ? WHERE session_id = ?",

@@ -330,6 +330,7 @@ def check_plan_feasibility(
     daily_limit_minutes: int = 480,
     weekly_limit_minutes: int = 3600,
     max_contiguous_minutes: int = 180,
+    horizon_days: int | None = None,
 ) -> dict[str, Any]:
     parsed_availability = availability if isinstance(availability, dict) and "blocks" in availability else parse_time_availability(availability) if isinstance(availability, str) else {"blocks": list(availability or [])}
     available_blocks, available_minutes = _availability_to_blocks(parsed_availability)
@@ -340,7 +341,14 @@ def check_plan_feasibility(
     if task_minutes <= 0:
         reasons.append({"code": "invalid_task_minutes", "message": "任务时长必须大于 0"})
 
-    if available_minutes < task_minutes:
+    # available_minutes 是每周（或自然循环周期）的可用时间
+    # 如果给定了计划天数（horizon_days），则计算整个周期的总可用时间
+    if horizon_days is not None and horizon_days > 0:
+        total_available_time = available_minutes / 7.0 * horizon_days
+    else:
+        total_available_time = available_minutes
+
+    if total_available_time < task_minutes:
         reasons.append({"code": "insufficient_time", "message": "用户可用时长不足以覆盖任务总量"})
         recommendations.append("缩小目标范围，或者延长计划周期")
 

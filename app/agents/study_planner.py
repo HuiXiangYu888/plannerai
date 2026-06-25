@@ -220,6 +220,12 @@ def generate_study_plan(text: str, suggested_title: str | None = None) -> dict[s
     if suggested_title and suggested_title.strip():
         final_title = suggested_title.strip()
         final_title = re.sub(r'[，,。；;、：:？?！!\n\r]', '', final_title).strip()
+        
+        # 修复大模型经常出现的“学习学习计划”等冗余问题
+        final_title = re.sub(r'(学习)+学习', '学习', final_title)
+        final_title = re.sub(r'(复习)+复习', '复习', final_title)
+        final_title = re.sub(r'(备考)+备考', '备考', final_title)
+        
         goal_summary = final_title
         # 清理“计划/安排”等后缀得到精炼的 goal_summary，用于阶段描述等内部拼装
         clean_suffixes = (
@@ -230,6 +236,10 @@ def generate_study_plan(text: str, suggested_title: str | None = None) -> dict[s
             if goal_summary.endswith(s):
                 goal_summary = goal_summary[:-len(s)]
         goal_summary = goal_summary.strip("的 ")
+        
+        # 如果提炼后的 goal_summary 为空（说明整个 title 就是一个 generic 后缀）
+        if not goal_summary:
+            goal_summary = "专属"
     else:
         goal_summary = _clean_goal_summary(raw_text, duration_info, availability_info)
         final_title = f"{goal_summary}计划"
@@ -245,7 +255,7 @@ def generate_study_plan(text: str, suggested_title: str | None = None) -> dict[s
     feasibility = None
     if duration_info.get("found") and availability_info.get("found"):
         study_minutes = resolve_study_minutes(duration_info, availability_info)
-        feasibility = check_plan_feasibility(study_minutes, availability_info)
+        feasibility = check_plan_feasibility(study_minutes, availability_info, horizon_days=horizon_days)
 
     slot_templates = _build_slot_templates(availability_info) if availability_info.get("found") else []
     phases = _build_phases(horizon_days, goal_summary) if horizon_days else []

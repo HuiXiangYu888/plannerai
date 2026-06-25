@@ -844,7 +844,7 @@ async def send_message(
     if synced_plan:
         existing_title = final_plan.get("title", "")
         new_title = synced_plan.get("title", "")
-        generic_titles = {"学习计划", "计划", "专属计划", "学习", "", None}
+        generic_titles = {"学习计划", "复习计划", "备考计划", "计划", "专属计划", "学习", "复习", "备考", "", None}
         is_mod = new_title and any(k in new_title for k in ["改成", "修改", "调整", "变成", "变为", "增加", "减少", "更新", "个月", "天"]) and existing_title
         if existing_title and (not new_title or new_title in generic_titles or is_mod):
             synced_plan["title"] = existing_title
@@ -856,7 +856,7 @@ async def send_message(
             if new_plan.get("found"):
                 existing_title = final_plan.get("title", "")
                 new_title = new_plan.get("title", "")
-                generic_titles = {"学习计划", "计划", "专属计划", "学习", "", None}
+                generic_titles = {"学习计划", "复习计划", "备考计划", "计划", "专属计划", "学习", "复习", "备考", "", None}
                 is_mod = new_title and any(k in new_title for k in ["改成", "修改", "调整", "变成", "变为", "增加", "减少", "更新", "个月", "天"]) and existing_title
                 if existing_title and (not new_title or new_title in generic_titles or is_mod):
                     new_plan["title"] = existing_title
