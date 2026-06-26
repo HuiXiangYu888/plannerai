@@ -56,6 +56,15 @@ body {
     display: none !important;
 }
 
+/* 隐藏对话窗口右上角的删除图标及工具栏 */
+#chat-area button[aria-label="Clear"],
+#chat-area button[aria-label="Delete"],
+#chat-area button[title="Clear"],
+#chat-area button[title="Delete"],
+#chat-area > div > div > button {
+    display: none !important;
+}
+
 /* 主行容器 */
 #main-row {
     height: 100vh !important;
@@ -592,8 +601,8 @@ def _render_plan_list(current_sid: str = "") -> str:
                 f'<div class="more-menu-wrapper" onclick="event.stopPropagation();" onmousedown="event.stopPropagation();">'
                 f'<button class="more-btn" onclick="toggleMoreMenu(event, \'{sid}\')" style="font-size:16px!important;line-height:1!important;">...</button>'
                 f'<div class="more-menu" id="menu-{sid}">'
-                f'<div class="menu-item" onclick="renamePlan(\'{sid}\', \'{safe_title}\')">✏️ 重命名</div>'
-                f'<div class="menu-item danger" onclick="deletePlan(\'{sid}\')">🗑️ 删除</div>'
+                f'<div class="menu-item" onclick="renamePlan(\'{sid}\', \'{safe_title}\')">重命名</div>'
+                f'<div class="menu-item danger" onclick="deletePlan(\'{sid}\')">删除</div>'
                 f'</div>'
                 f'</div>'
                 f'</div>'
@@ -995,13 +1004,13 @@ def build_demo() -> gr.Blocks:
                     elem_classes=["plan-list-wrapper"],
                 )
                 with gr.Column(elem_id="export-btn-container"):
-                    export_btn = gr.Button("📥 导出选定计划", elem_id="export-btn")
+                    export_btn = gr.Button("导出选定计划", elem_id="export-btn")
                     
                     with gr.Column(visible=False, elem_id="export-options-col") as export_options_col:
                         export_checkboxgroup = gr.CheckboxGroup(label="请勾选要导出的计划", choices=[], value=[], elem_id="export-checkbox-group")
                         with gr.Row():
-                            confirm_export_btn = gr.Button("✅ 确认导出")
-                            cancel_export_btn = gr.Button("❌ 取消")
+                            confirm_export_btn = gr.Button("确认导出")
+                            cancel_export_btn = gr.Button("取消")
 
                     export_file = gr.File(label="", elem_id="export-file", interactive=False)
 
@@ -1016,6 +1025,8 @@ def build_demo() -> gr.Blocks:
                     layout="bubble",
                     allow_tags=True,
                     type="messages",
+                    show_copy_button=False,
+                    show_share_button=False,
                 )
 
                 with gr.Row(elem_id="input-area"):
